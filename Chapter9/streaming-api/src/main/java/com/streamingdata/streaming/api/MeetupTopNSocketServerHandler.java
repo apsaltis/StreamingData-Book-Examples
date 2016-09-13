@@ -11,7 +11,6 @@ import io.netty.handler.codec.http.*;
 import io.netty.handler.codec.http.websocketx.*;
 import io.netty.handler.timeout.IdleState;
 import io.netty.handler.timeout.IdleStateEvent;
-import io.netty.util.AttributeKey;
 import io.netty.util.CharsetUtil;
 import io.netty.util.concurrent.FastThreadLocal;
 import org.apache.log4j.Logger;
@@ -23,6 +22,7 @@ import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static io.netty.handler.codec.http.HttpHeaderNames.CONTENT_TYPE;
 import static io.netty.handler.codec.http.HttpHeaderNames.HOST;
@@ -31,16 +31,16 @@ import static io.netty.handler.codec.http.HttpResponseStatus.*;
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 
 
-public class WebSocketServerHandler extends SimpleChannelInboundHandler<Object> {
+class MeetupTopNSocketServerHandler extends SimpleChannelInboundHandler<Object> {
 
 
     private WebSocketServerHandshaker handshaker;
-    private static final Logger logger = Logger.getLogger(WebSocketServerHandler.class);
+    private static final Logger logger = Logger.getLogger(MeetupTopNSocketServerHandler.class);
     private static final ObjectMapper mapper = new ObjectMapper();
     private static final String WEBSOCKET_PATH = "/streaming";
     private static String defaultHtmlPage;
-    private static final AttributeKey<String> STREAM_NAME = AttributeKey.valueOf("stream_name");
-    private static final AttributeKey<String> GROUP_ID = AttributeKey.valueOf("groupId");
+    private static final ConcurrentHashMap<ChannelHandlerContext, StreamMessageConsumer> channelToConsumer = new ConcurrentHashMap<>();
+
 
     private static final FastThreadLocal<DateFormat> FORMAT = new FastThreadLocal<DateFormat>() {
         @Override
@@ -50,7 +50,7 @@ public class WebSocketServerHandler extends SimpleChannelInboundHandler<Object> 
     };
 
 
-    public WebSocketServerHandler() throws IOException {
+    MeetupTopNSocketServerHandler() throws IOException {
         defaultHtmlPage = new String(Files.readAllBytes(Paths.get("index.html")));
 
     }
@@ -145,7 +145,9 @@ public class WebSocketServerHandler extends SimpleChannelInboundHandler<Object> 
         if (frame instanceof CloseWebSocketFrame) {
             logger.debug("CloseWebSocketFrame Request from [ " + ctx.channel().remoteAddress().toString() + "]");
             handshaker.close(ctx.channel(), (CloseWebSocketFrame) frame.retain());
-            ChannelStreamManager.removeSubscriber(ctx);
+            if (channelToConsumer.containsKey(ctx)) {
+                channelToConsumer.get(ctx).stop();
+            }
             ctx.channel().close();
             return;
         }
@@ -179,9 +181,12 @@ public class WebSocketServerHandler extends SimpleChannelInboundHandler<Object> 
             logger.debug("WebSocket Request from [ " + ctx.channel().remoteAddress().toString() + "]");
 
 
-            ctx.channel().attr(STREAM_NAME).set("meetup-topn-rsvps");
-            ctx.channel().attr(GROUP_ID).set(UUID.randomUUID().toString());
-            ChannelStreamManager.addSubscriber(ctx);
+            //the channel is not already registered so spin up a connection to Kafka
+            if (!channelToConsumer.containsKey(ctx)) {
+                StreamMessageConsumer streamMessageConsumer = new StreamMessageConsumer("meetup-topn-rsvps",UUID.randomUUID().toString(), ctx);
+                channelToConsumer.put(ctx, streamMessageConsumer);
+                streamMessageConsumer.process();
+            }
             TextWebSocketFrame returnframe = new TextWebSocketFrame(mapper.writeValueAsString("{response:success}"));
             ctx.channel().write(returnframe);
 
@@ -216,7 +221,9 @@ public class WebSocketServerHandler extends SimpleChannelInboundHandler<Object> 
 
             if (null != channel) {
                 if (!channel.isOpen()) {
-                    ChannelStreamManager.removeSubscriber(ctx);
+                    if (channelToConsumer.containsKey(ctx)) {
+                        channelToConsumer.get(ctx).stop();
+                    }
 
                 }
                 if (channel.isWritable() && channel.isActive()) {
