@@ -1,0 +1,126 @@
+<html>
+<head>
+    <title>Bare Bones Streaming</title>
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+    <link rel="stylesheet" href="http://yui.yahooapis.com/pure/0.6.0/pure-min.css">
+</head>
+<body style="font-size: 12px">
+
+<script type="text/javascript">
+    var socket = null;
+
+    if (!window.WebSocket) {
+        window.WebSocket = window.MozWebSocket;
+    }
+    if (!window.WebSocket) {
+        alert("Your browser does not support Web Socket.");
+    }
+
+    function initializeSocket() {
+        if (window.WebSocket) {
+            socket = new WebSocket($("#socketUrl").val());
+            socket.onmessage = function(event) {
+                var message = jQuery.parseJSON(event.data);
+                writeLine(JSON.stringify(message, null, '\t'));
+            };
+
+            socket.onopen = function(event) {
+                createStream();
+            };
+
+            socket.onclose = function(event) {
+                socket = null;
+            };
+
+            socket.onerror = function(event) {
+                writeLine("Error: ");
+            };
+        } else {
+            alert("Your browser does not support Web Socket.");
+        }
+    }
+
+    function createStream() {
+        var streamType = "meetup-topn-rsvps";
+        writeLine("Opening: " + streamType);
+        socket.send('{","streamType":"' + streamType + '"}');
+    }
+
+    function send(message) {
+        if (!window.WebSocket) {
+            return;
+        }
+        if (socket.readyState == WebSocket.OPEN) {
+            socket.send(message);
+        } else {
+            alert("The socket is not open.");
+        }
+    }
+
+    function openSocket() {
+        if (!window.WebSocket) {
+            return;
+        }
+        if (socket == null) {
+            $("#responseText").val("");
+            initializeSocket();
+        }
+    }
+
+    function closeSocket() {
+        if (!window.WebSocket) {
+            return;
+        }
+        if (socket.readyState == WebSocket.OPEN) {
+            writeLine("Closing socket");
+            socket.close();
+            socket = null;
+            writeLine("Socket closed");
+        }
+    }
+
+    function writeLine(message) {
+        if($("#preserveLogCheckbox").prop("checked")) {
+            $("#responseText")[0].value += message + "\n\n";
+        } else {
+            $("#responseText").val(message);
+        }
+    }
+
+    function hostname(url) {
+        var parser = document.createElement('a');
+        parser.href = url;
+        return parser.hostname;
+    }
+</script>
+
+<form class="pure-form pure-form-aligned">
+    <fieldset>
+        <div class="pure-control-group">
+            <label for="socketUrl">Socket URL</label>
+            <input type="text" maxlength="256" name="socketUrl" id="socketUrl" style="width:450" value=""/>
+        </div>
+
+        <div class="pure-control-group">
+            <label>Connection</label>
+            <button id="openSocket" class="pure-button pure-button-primary" type="button">Open</button>
+            <button id="closeSocket" class="pure-button" type="button">Close</button>
+        </div>
+    </fieldset>
+    <fieldset>
+        <div class="pure-control-group">
+            <label>Stream Output</label>
+            <textarea id="responseText" style="width: 80%; height:1000px;"></textarea>
+        </div>
+    </fieldset>
+</form>
+
+<script type="text/javascript">
+    $(document).ready(function() {
+        $("#socketUrl").val("ws://" + window.location.host + "/streaming");
+        $("#openSocket").click(openSocket);
+        $("#closeSocket").click(closeSocket);
+    });
+</script>
+</body>
+</html>
