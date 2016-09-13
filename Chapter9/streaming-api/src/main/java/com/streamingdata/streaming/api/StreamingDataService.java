@@ -50,11 +50,11 @@ public final class StreamingDataService {
                     .handler(new LoggingHandler(LogLevel.DEBUG))
                     .childHandler(new WebSocketServerInitializer());
 
-            Channel ch = bootstrap.bind(bindAddress, PORT).sync().channel();
+            Channel channel = bootstrap.bind(bindAddress, PORT).sync().channel();
 
             System.out.println("Open your web browser and navigate to http://" + bindAddress + ":" + PORT + '/');
 
-            ch.closeFuture().sync();
+            channel.closeFuture().sync();
         } finally {
             bossGroup.shutdownGracefully();
             workerGroup.shutdownGracefully();

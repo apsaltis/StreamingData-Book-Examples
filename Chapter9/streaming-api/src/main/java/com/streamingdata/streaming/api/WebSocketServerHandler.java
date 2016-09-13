@@ -22,12 +22,10 @@ import java.nio.file.Paths;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.List;
-import java.util.Random;
 import java.util.UUID;
 
-import static io.netty.handler.codec.http.HttpHeaders.Names.CONTENT_TYPE;
-import static io.netty.handler.codec.http.HttpHeaders.Names.HOST;
+import static io.netty.handler.codec.http.HttpHeaderNames.CONTENT_TYPE;
+import static io.netty.handler.codec.http.HttpHeaderNames.HOST;
 import static io.netty.handler.codec.http.HttpMethod.GET;
 import static io.netty.handler.codec.http.HttpResponseStatus.*;
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
@@ -36,7 +34,6 @@ import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 public class WebSocketServerHandler extends SimpleChannelInboundHandler<Object> {
 
 
-    private final static Random random = new Random();
     private WebSocketServerHandshaker handshaker;
     private static final Logger logger = Logger.getLogger(WebSocketServerHandler.class);
     private static final ObjectMapper mapper = new ObjectMapper();
@@ -99,7 +96,7 @@ public class WebSocketServerHandler extends SimpleChannelInboundHandler<Object> 
             return;
         }
 
-        final String uriString = req.getUri();
+        final String uriString = req.uri();
         // Send the demo page and favicon.ico
         if ("/".equals(uriString)) {
             ByteBuf content = HtmlPage();
@@ -129,7 +126,7 @@ public class WebSocketServerHandler extends SimpleChannelInboundHandler<Object> 
 
     }
 
-    protected ByteBuf HtmlPage() {
+    private ByteBuf HtmlPage() {
 
         try {
             return Unpooled.copiedBuffer(defaultHtmlPage, CharsetUtil.US_ASCII);
@@ -172,7 +169,7 @@ public class WebSocketServerHandler extends SimpleChannelInboundHandler<Object> 
     }
 
 
-    protected void handleWebSocketRequest(ChannelHandlerContext ctx, WebSocketFrame frame) {
+    private void handleWebSocketRequest(ChannelHandlerContext ctx, WebSocketFrame frame) {
 
         try {
             // Ignoring the input.....
